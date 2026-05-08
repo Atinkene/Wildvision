@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: wildvision-api
+    runtime: python
+    plan: standard        # 2 GB RAM min — les modèles sont lourds
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: MODEL_DIR
+        value: /opt/render/project/src/models
+    disk:
+      name: wildvision-models
+      mountPath: /opt/render/project/src/models
+      sizeGB: 5             # suffisant pour yolov8m + rfdetr

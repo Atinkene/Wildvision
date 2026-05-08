@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>WildVision — Détection d'animaux sauvages</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#060810;--surface:#0c1020;--surface2:#111827;
+  --border:#1e2d4a;--border2:#243552;
+  --green:#00ff88;--green2:#00cc6a;--green-dim:#00ff8822;
+  --blue:#00aaff;--blue-dim:#00aaff18;
+  --amber:#ffaa00;--amber-dim:#ffaa0015;
+  --red:#ff4466;
+  --text:#e2e8f0;--muted:#64748b;--muted2:#94a3b8;
+  --font-mono:'Share Tech Mono',monospace;
+  --font-display:'Syne',sans-serif;
+  --radius:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font-display);min-height:100vh;overflow-x:hidden}
+
+/* ── Grid background ── */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);
+  background-size:40px 40px;opacity:.3;pointer-events:none;z-index:0
+}
+
+/* ── Layout ── */
+.shell{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:24px}
+
+/* ── Header ── */
+header{display:flex;align-items:center;justify-content:space-between;padding:20px 0 32px;border-bottom:1px solid var(--border)}
+.logo{display:flex;align-items:center;gap:14px}
+.logo-icon{width:42px;height:42px;background:linear-gradient(135deg,var(--green),var(--blue));
+  border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px}
+.logo h1{font-size:1.6rem;font-weight:800;letter-spacing:-.02em}
+.logo h1 span{color:var(--green)}
+.badge{font-family:var(--font-mono);font-size:.7rem;color:var(--muted2);
+  background:var(--surface2);border:1px solid var(--border2);padding:4px 10px;border-radius:4px}
+.status-bar{display:flex;gap:12px;align-items:center}
+.pill{font-family:var(--font-mono);font-size:.7rem;padding:5px 12px;border-radius:20px;
+  display:flex;align-items:center;gap:6px}
+.pill.ok{background:var(--green-dim);color:var(--green);border:1px solid var(--green)44}
+.pill.off{background:#ff446618;color:var(--red);border:1px solid var(--red)44}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── Main grid ── */
+.main{display:grid;grid-template-columns:340px 1fr;gap:24px;padding-top:28px}
+
+/* ── Panel ── */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.panel-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;
+  align-items:center;justify-content:space-between}
+.panel-head h2{font-size:.85rem;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted2)}
+.panel-body{padding:20px}
+
+/* ── Mode tabs ── */
+.mode-tabs{display:flex;gap:4px;background:var(--bg);border-radius:8px;padding:4px;margin-bottom:20px}
+.mode-tab{flex:1;padding:9px;border-radius:6px;border:none;background:transparent;
+  color:var(--muted);font-family:var(--font-display);font-size:.75rem;font-weight:700;
+  cursor:pointer;transition:.2s;text-transform:uppercase;letter-spacing:.05em}
+.mode-tab.active{background:var(--surface2);color:var(--green);border:1px solid var(--border2)}
+.mode-tab:hover:not(.active){color:var(--text)}
+
+/* ── Upload zone ── */
+.drop-zone{border:2px dashed var(--border2);border-radius:10px;padding:32px 20px;
+  text-align:center;cursor:pointer;transition:.25s;position:relative}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--green);background:var(--green-dim)}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-icon{font-size:2.4rem;margin-bottom:10px}
+.drop-zone p{font-size:.8rem;color:var(--muted2)}
+.drop-zone strong{color:var(--green)}
+
+/* ── Webcam panel ── */
+.webcam-wrap{position:relative;border-radius:10px;overflow:hidden;background:#000;
+  aspect-ratio:16/9;display:flex;align-items:center;justify-content:center}
+.webcam-wrap video{width:100%;height:100%;object-fit:cover}
+.webcam-wrap canvas.overlay{position:absolute;inset:0;width:100%;height:100%}
+.webcam-placeholder{text-align:center;color:var(--muted)}
+.webcam-placeholder .icon{font-size:3rem;margin-bottom:8px}
+
+/* ── Controls ── */
+.ctrl-group{margin-bottom:18px}
+.ctrl-label{font-size:.72rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--muted2);margin-bottom:8px;display:block}
+.model-btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.model-btn{padding:9px 6px;border-radius:6px;border:1px solid var(--border2);
+  background:var(--bg);color:var(--muted2);font-family:var(--font-mono);
+  font-size:.7rem;cursor:pointer;transition:.2s;text-align:center}
+.model-btn.active{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+.model-btn:hover:not(.active){border-color:var(--border2);color:var(--text);background:var(--surface2)}
+
+.slider-wrap{display:flex;align-items:center;gap:10px}
+input[type=range]{flex:1;height:4px;border-radius:2px;accent-color:var(--green);cursor:pointer}
+.slider-val{font-family:var(--font-mono);font-size:.8rem;color:var(--green);min-width:36px;text-align:right}
+
+/* ── Buttons ── */
+.btn{width:100%;padding:13px;border-radius:8px;border:none;cursor:pointer;
+  font-family:var(--font-display);font-size:.85rem;font-weight:700;
+  letter-spacing:.04em;transition:.2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-primary{background:linear-gradient(135deg,var(--green),var(--blue));color:#000}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+.btn-secondary{background:var(--surface2);border:1px solid var(--border2);color:var(--text)}
+.btn-secondary:hover{border-color:var(--green);color:var(--green)}
+.btn-danger{background:#ff446622;border:1px solid var(--red)44;color:var(--red)}
+.btn-danger:hover{background:#ff446633}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-row{display:flex;flex-direction:column;gap:8px}
+
+/* ── Right panel ── */
+.right-col{display:flex;flex-direction:column;gap:20px}
+
+/* ── Preview ── */
+.preview-area{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  overflow:hidden;min-height:380px;position:relative;
+  display:flex;align-items:center;justify-content:center}
+.preview-placeholder{text-align:center;color:var(--muted);padding:40px}
+.preview-placeholder .big-icon{font-size:4rem;margin-bottom:12px;opacity:.3}
+.preview-placeholder p{font-size:.85rem}
+#preview-img{max-width:100%;max-height:520px;display:none;border-radius:4px}
+#preview-canvas{display:none;border-radius:4px;max-width:100%}
+
+/* ── Results ── */
+.results-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.result-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+.result-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.model-tag{font-family:var(--font-mono);font-size:.72rem;padding:4px 10px;
+  border-radius:4px;font-weight:700}
+.model-tag.yolo{background:var(--green-dim);color:var(--green);border:1px solid var(--green)33}
+.model-tag.rfdetr{background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue)33}
+.metric{font-family:var(--font-mono);font-size:.72rem;color:var(--muted2)}
+.metric span{color:var(--amber)}
+
+.det-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto}
+.det-list::-webkit-scrollbar{width:4px}
+.det-list::-webkit-scrollbar-track{background:var(--bg)}
+.det-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.det-item{display:flex;align-items:center;gap:8px;padding:7px 10px;
+  background:var(--bg);border-radius:6px;border:1px solid var(--border)}
+.det-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.det-name{font-size:.8rem;font-weight:700;flex:1}
+.det-conf{font-family:var(--font-mono);font-size:.72rem;color:var(--muted2)}
+.det-bar{height:3px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden}
+.det-bar-fill{height:100%;border-radius:2px;transition:.4s}
+.no-det{font-family:var(--font-mono);font-size:.75rem;color:var(--muted);text-align:center;padding:20px}
+
+/* ── Video results ── */
+.video-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.stat-box{background:var(--bg);border:1px solid var(--border);border-radius:8px;
+  padding:12px;text-align:center}
+.stat-val{font-family:var(--font-mono);font-size:1.2rem;color:var(--green);font-weight:700}
+.stat-label{font-size:.65rem;color:var(--muted2);text-transform:uppercase;margin-top:2px}
+
+/* ── Log ── */
+.log{font-family:var(--font-mono);font-size:.72rem;color:var(--muted2);
+  background:var(--bg);border:1px solid var(--border);border-radius:8px;
+  padding:12px;max-height:120px;overflow-y:auto;line-height:1.8}
+.log .log-ok{color:var(--green)}
+.log .log-err{color:var(--red)}
+.log .log-info{color:var(--blue)}
+
+/* ── Spinner ── */
+.spinner{width:20px;height:20px;border:2px solid transparent;
+  border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Webcam real-time badge ── */
+.rt-badge{position:absolute;top:10px;left:10px;background:#ff000088;
+  color:#fff;font-family:var(--font-mono);font-size:.65rem;padding:4px 8px;
+  border-radius:4px;display:none;align-items:center;gap:5px}
+.rt-dot{width:6px;height:6px;background:red;border-radius:50%;animation:pulse 1s infinite}
+
+/* ── Responsive ── */
+@media(max-width:900px){
+  .main{grid-template-columns:1fr}
+  .results-grid{grid-template-columns:1fr}
+}
+
+/* ── Animations ── */
+.fade-in{animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🐆</div>
+    <div>
+      <h1>Wild<span>Vision</span></h1>
+      <div class="badge">YOLOv8m · RF-DETR · Wild Animals v5</div>
+    </div>
+  </div>
+  <div class="status-bar">
+    <div class="pill ok" id="pill-yolo"><span class="dot"></span>YOLOv8m</div>
+    <div class="pill ok" id="pill-rfdetr"><span class="dot"></span>RF-DETR</div>
+    <div class="pill ok" id="pill-api"><span class="dot"></span>API</div>
+  </div>
+</header>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- LEFT : Controls -->
+  <div class="left-col">
+    <div class="panel">
+      <div class="panel-head"><h2>📥 Source d'entrée</h2></div>
+      <div class="panel-body">
+
+        <!-- Mode tabs -->
+        <div class="mode-tabs">
+          <button class="mode-tab active" data-mode="photo" onclick="setMode('photo')">📷 Photo</button>
+          <button class="mode-tab" data-mode="video" onclick="setMode('video')">🎬 Vidéo</button>
+          <button class="mode-tab" data-mode="webcam" onclick="setMode('webcam')">📡 Webcam</button>
+        </div>
+
+        <!-- Photo mode -->
+        <div id="mode-photo">
+          <div class="drop-zone" id="drop-zone" ondragover="onDragOver(event)"
+               ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+            <input type="file" id="file-photo" accept="image/*" onchange="onFileSelect(event,'photo')"/>
+            <div class="drop-icon">🖼️</div>
+            <p><strong>Glisse une image</strong> ou clique pour sélectionner</p>
+            <p style="margin-top:6px;font-size:.72rem">JPG · PNG · WEBP · BMP</p>
+          </div>
+        </div>
+
+        <!-- Video mode -->
+        <div id="mode-video" style="display:none">
+          <div class="drop-zone" id="drop-zone-video">
+            <input type="file" id="file-video" accept="video/*" onchange="onFileSelect(event,'video')"/>
+            <div class="drop-icon">🎞️</div>
+            <p><strong>Glisse une vidéo</strong> ou clique pour sélectionner</p>
+            <p style="margin-top:6px;font-size:.72rem">MP4 · AVI · MOV · WEBM</p>
+          </div>
+          <div class="ctrl-group" style="margin-top:16px">
+            <span class="ctrl-label">Analyser 1 frame sur</span>
+            <div class="slider-wrap">
+              <input type="range" id="every-n" min="1" max="10" value="3"
+                     oninput="document.getElementById('every-n-val').textContent=this.value"/>
+              <span class="slider-val" id="every-n-val">3</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Webcam mode -->
+        <div id="mode-webcam" style="display:none">
+          <div class="webcam-wrap" id="webcam-wrap">
+            <video id="webcam-video" autoplay muted playsinline></video>
+            <canvas id="webcam-canvas" class="overlay"></canvas>
+            <div class="webcam-placeholder" id="webcam-placeholder">
+              <div class="icon">📷</div>
+              <p>Cliquez sur Démarrer</p>
+            </div>
+            <div class="rt-badge" id="rt-badge"><span class="rt-dot"></span>LIVE</div>
+          </div>
+          <div class="ctrl-group" style="margin-top:14px">
+            <span class="ctrl-label">Mode webcam</span>
+            <div class="model-btns" style="grid-template-columns:1fr 1fr">
+              <button class="model-btn active" data-wcmode="stream" onclick="setWcMode('stream')">⚡ Temps réel</button>
+              <button class="model-btn" data-wcmode="snap" onclick="setWcMode('snap')">📸 Capture</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="panel" style="margin-top:0">
+      <div class="panel-head"><h2>⚙️ Paramètres</h2></div>
+      <div class="panel-body">
+
+        <div class="ctrl-group">
+          <span class="ctrl-label">Modèle</span>
+          <div class="model-btns">
+            <button class="model-btn" data-model="yolo" onclick="setModel('yolo')">YOLOv8m</button>
+            <button class="model-btn" data-model="rfdetr" onclick="setModel('rfdetr')">RF-DETR</button>
+            <button class="model-btn active" data-model="both" onclick="setModel('both')">Les deux</button>
+          </div>
+        </div>
+
+        <div class="ctrl-group">
+          <span class="ctrl-label">Seuil de confiance</span>
+          <div class="slider-wrap">
+            <input type="range" id="conf-slider" min="5" max="95" value="25"
+                   oninput="document.getElementById('conf-val').textContent=(this.value/100).toFixed(2)"/>
+            <span class="slider-val" id="conf-val">0.25</span>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btn-detect" onclick="runDetection()" disabled>
+            <span>🔍 Détecter</span>
+          </button>
+          <button class="btn btn-secondary" id="btn-webcam-start" onclick="toggleWebcam()" style="display:none">
+            📷 Démarrer la webcam
+          </button>
+          <button class="btn btn-danger" id="btn-reset" onclick="reset()" style="display:none">
+            ✕ Réinitialiser
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="panel">
+      <div class="panel-head"><h2>📋 Log</h2></div>
+      <div class="panel-body" style="padding:12px">
+        <div class="log" id="log">
+          <span class="log-info">[init]</span> WildVision prêt — chargement de l'API...<br/>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT : Preview + Results -->
+  <div class="right-col">
+
+    <!-- Preview -->
+    <div class="preview-area" id="preview-area">
+      <div class="preview-placeholder" id="preview-placeholder">
+        <div class="big-icon">🐘</div>
+        <p>Sélectionne une image, une vidéo<br/>ou active la webcam pour commencer</p>
+      </div>
+      <img id="preview-img" alt="preview"/>
+      <canvas id="preview-canvas"></canvas>
+    </div>
+
+    <!-- Video stats (hidden by default) -->
+    <div id="video-stats-wrap" style="display:none" class="fade-in">
+      <div class="video-stats">
+        <div class="stat-box"><div class="stat-val" id="vs-frames">—</div><div class="stat-label">Frames analysées</div></div>
+        <div class="stat-box"><div class="stat-val" id="vs-time">—</div><div class="stat-label">Temps (s)</div></div>
+        <div class="stat-box"><div class="stat-val" id="vs-dets">—</div><div class="stat-label">Détections totales</div></div>
+        <div class="stat-box"><div class="stat-val" id="vs-fps">—</div><div class="stat-label">FPS source</div></div>
+      </div>
+      <div id="class-count-wrap" class="panel" style="padding:16px">
+        <div class="panel-head" style="padding:0 0 12px;margin-bottom:12px"><h2>🔢 Classes détectées</h2></div>
+        <div id="class-counts" class="det-list"></div>
+      </div>
+    </div>
+
+    <!-- Detection results -->
+    <div id="results-wrap" class="results-grid" style="display:none">
+      <!-- YOLO card -->
+      <div class="result-card fade-in">
+        <div class="result-card-head">
+          <span class="model-tag yolo">YOLOv8m</span>
+          <span class="metric" id="yolo-metric">—</span>
+        </div>
+        <div class="det-list" id="yolo-dets"></div>
+      </div>
+      <!-- RFDETR card -->
+      <div class="result-card fade-in">
+        <div class="result-card-head">
+          <span class="model-tag rfdetr">RF-DETR</span>
+          <span class="metric" id="rfdetr-metric">—</span>
+        </div>
+        <div class="det-list" id="rfdetr-dets"></div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /main -->
+</div><!-- /shell -->
+
+<script>
+// ── Config ─────────────────────────────────────────────────────────────────
+const API = '';  // vide = même origine; ou 'http://localhost:8000'
+const WS_URL = (location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws/webcam';
+
+// ── State ──────────────────────────────────────────────────────────────────
+let currentMode   = 'photo';
+let currentModel  = 'both';
+let wcMode        = 'stream';
+let selectedFile  = null;
+let webcamStream  = null;
+let wsConn        = null;
+let isStreaming   = false;
+let streamTimer   = null;
+
+// ── Log ────────────────────────────────────────────────────────────────────
+function log(msg, type='info'){
+  const el = document.getElementById('log');
+  const span = document.createElement('span');
+  span.className = 'log-'+type;
+  span.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}<br/>`;
+  el.appendChild(span);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Health check ───────────────────────────────────────────────────────────
+async function checkHealth(){
+  try{
+    const r = await fetch(API+'/health');
+    const d = await r.json();
+    document.getElementById('pill-api').className = 'pill ok';
+    document.getElementById('pill-yolo').className = d.models.yolov8m?'pill ok':'pill off';
+    document.getElementById('pill-rfdetr').className = d.models.rfdetr?'pill ok':'pill off';
+    log('API connectée — YOLOv8m:'+(d.models.yolov8m?'✅':'❌')+' RF-DETR:'+(d.models.rfdetr?'✅':'❌'),'ok');
+  }catch(e){
+    document.getElementById('pill-api').className='pill off';
+    log('API non joignable — mode demo','err');
+  }
+}
+
+// ── Mode switching ─────────────────────────────────────────────────────────
+function setMode(mode){
+  if(wsConn) stopStream();
+  currentMode = mode;
+  ['photo','video','webcam'].forEach(m=>{
+    document.getElementById('mode-'+m).style.display = m===mode?'block':'none';
+    document.querySelector(`[data-mode="${m}"]`).classList.toggle('active', m===mode);
+  });
+  document.getElementById('btn-detect').style.display = mode==='webcam'?'none':'flex';
+  document.getElementById('btn-webcam-start').style.display = mode==='webcam'?'flex':'none';
+  document.getElementById('btn-detect').disabled = true;
+  selectedFile = null;
+  resetResults();
+}
+
+function setModel(m){
+  currentModel = m;
+  document.querySelectorAll('[data-model]').forEach(b=>b.classList.toggle('active',b.dataset.model===m));
+  // Résultats en mode single → masquer une card
+  const rw = document.getElementById('results-wrap');
+  if(rw.style.display!=='none'){
+    const cards = rw.querySelectorAll('.result-card');
+    if(m==='both'){cards.forEach(c=>c.style.display=''); rw.style.gridTemplateColumns='1fr 1fr';}
+    else{cards[0].style.display=m==='yolo'?'':'none'; cards[1].style.display=m==='rfdetr'?'':'none'; rw.style.gridTemplateColumns='1fr';}
+  }
+}
+
+function setWcMode(m){
+  wcMode = m;
+  document.querySelectorAll('[data-wcmode]').forEach(b=>b.classList.toggle('active',b.dataset.wcmode===m));
+}
+
+// ── File selection ─────────────────────────────────────────────────────────
+function onFileSelect(e, type){
+  const f = e.target.files[0];
+  if(!f) return;
+  selectedFile = f;
+  document.getElementById('btn-detect').disabled = false;
+  document.getElementById('btn-reset').style.display = 'flex';
+  log(`Fichier sélectionné : ${f.name} (${(f.size/1024).toFixed(0)} KB)`,'info');
+
+  if(type==='photo'){
+    const url = URL.createObjectURL(f);
+    const img = document.getElementById('preview-img');
+    img.src = url; img.style.display='block';
+    document.getElementById('preview-placeholder').style.display='none';
+    document.getElementById('preview-canvas').style.display='none';
+  } else {
+    const vid = document.createElement('video');
+    vid.src = URL.createObjectURL(f);
+    vid.style.maxWidth='100%'; vid.controls = true;
+    const pa = document.getElementById('preview-area');
+    document.getElementById('preview-placeholder').style.display='none';
+    let old = pa.querySelector('video.preview-vid');
+    if(old) old.remove();
+    vid.className='preview-vid'; pa.appendChild(vid);
+  }
+}
+
+function onDragOver(e){e.preventDefault();document.getElementById('drop-zone').classList.add('drag')}
+function onDragLeave(){document.getElementById('drop-zone').classList.remove('drag')}
+function onDrop(e){
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if(!f) return;
+  const fakeEvt = {target:{files:[f]}};
+  onFileSelect(fakeEvt,'photo');
+}
+
+// ── Detection ──────────────────────────────────────────────────────────────
+function getConf(){return parseFloat(document.getElementById('conf-slider').value)/100}
+
+async function runDetection(){
+  if(!selectedFile) return;
+  const btn = document.getElementById('btn-detect');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span> Analyse...';
+  resetResults();
+
+  try{
+    if(currentMode==='photo') await detectImage();
+    else await detectVideo();
+  }catch(e){
+    log('Erreur: '+e.message,'err');
+  }
+
+  btn.disabled=false;
+  btn.innerHTML='<span>🔍 Détecter</span>';
+}
+
+async function detectImage(){
+  const fd = new FormData();
+  fd.append('file', selectedFile);
+  const url = `${API}/predict/image?model=${currentModel}&conf=${getConf()}&annotated=true`;
+  log(`Envoi image → /predict/image [model=${currentModel}]`,'info');
+
+  const r = await fetch(url, {method:'POST',body:fd});
+  const d = await r.json();
+
+  if(currentModel==='both'){
+    showImageResults(d.yolo, 'yolo', null);
+    showImageResults(d.rfdetr, 'rfdetr', d.yolo?.annotated_image);
+  } else {
+    showImageResults(d, currentModel, null);
+  }
+
+  // Afficher image annotée
+  if(d.annotated_image || (d.yolo && d.yolo.annotated_image)){
+    const b64 = d.annotated_image || d.yolo.annotated_image;
+    const img = document.getElementById('preview-img');
+    img.src = 'data:image/jpeg;base64,'+b64;
+  }
+
+  document.getElementById('results-wrap').style.display='grid';
+  const m = currentModel;
+  document.querySelectorAll('.result-card')[0].style.display = m==='rfdetr'?'none':'';
+  document.querySelectorAll('.result-card')[1].style.display = m==='yolo'?'none':'';
+  if(m!=='both') document.getElementById('results-wrap').style.gridTemplateColumns='1fr';
+}
+
+async function detectVideo(){
+  const fd = new FormData();
+  fd.append('file', selectedFile);
+  const evN = document.getElementById('every-n').value;
+  const mdl = currentModel==='both'?'yolo':currentModel;
+  const url = `${API}/predict/video?model=${mdl}&conf=${getConf()}&every_n=${evN}`;
+  log(`Envoi vidéo → /predict/video [model=${mdl}, every_n=${evN}]`,'info');
+
+  const r = await fetch(url, {method:'POST',body:fd});
+  const d = await r.json();
+
+  document.getElementById('vs-frames').textContent = d.processed_frames;
+  document.getElementById('vs-time').textContent = d.processing_time_s+'s';
+  document.getElementById('vs-dets').textContent = Object.values(d.class_counts).reduce((a,b)=>a+b,0);
+  document.getElementById('vs-fps').textContent = d.video_fps;
+  document.getElementById('video-stats-wrap').style.display='block';
+
+  // Counts
+  const cc = document.getElementById('class-counts');
+  cc.innerHTML = Object.entries(d.class_counts).sort((a,b)=>b[1]-a[1])
+    .map(([n,c])=>`<div class="det-item"><div class="det-dot" style="background:#00ff88"></div>
+      <span class="det-name">${n}</span><span class="det-conf">${c} détections</span></div>`).join('');
+
+  log(`Vidéo analysée — ${d.processed_frames} frames — ${Object.keys(d.class_counts).length} classes`,'ok');
+}
+
+function showImageResults(data, modelKey, fallbackImg){
+  if(!data || data.error){
+    log(`${modelKey}: ${data?.error||'erreur'}`, 'err'); return;
+  }
+  const dets = data.detections || [];
+  const listEl = document.getElementById(modelKey===('rfdetr')?'rfdetr-dets':'yolo-dets');
+  const metricEl = document.getElementById(modelKey==='rfdetr'?'rfdetr-metric':'yolo-metric');
+
+  metricEl.innerHTML = `<span>${data.ms}ms</span> · <span style="color:var(--amber)">${dets.length} objet${dets.length>1?'s':''}</span>`;
+
+  if(dets.length===0){
+    listEl.innerHTML='<div class="no-det">Aucune détection</div>'; return;
+  }
+  listEl.innerHTML = dets.sort((a,b)=>b.confidence-a.confidence).map(d=>{
+    const [r,g,b2] = d.color||[180,180,180];
+    const col = `rgb(${r},${g},${b2})`;
+    return `<div class="det-item">
+      <div class="det-dot" style="background:${col}"></div>
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between">
+          <span class="det-name">${d.class_name}</span>
+          <span class="det-conf">${(d.confidence*100).toFixed(0)}%</span>
+        </div>
+        <div class="det-bar"><div class="det-bar-fill" style="width:${d.confidence*100}%;background:${col}"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  log(`${modelKey}: ${dets.length} détection(s) en ${data.ms}ms`,'ok');
+}
+
+// ── Webcam ─────────────────────────────────────────────────────────────────
+async function toggleWebcam(){
+  if(webcamStream){ stopWebcam(); return; }
+  await startWebcam();
+}
+
+async function startWebcam(){
+  try{
+    webcamStream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:480},audio:false});
+    const vid = document.getElementById('webcam-video');
+    vid.srcObject = webcamStream;
+    document.getElementById('webcam-placeholder').style.display='none';
+    document.getElementById('btn-webcam-start').textContent='⏹ Arrêter';
+    document.getElementById('btn-webcam-start').className='btn btn-danger';
+    log('Webcam démarrée','ok');
+
+    if(wcMode==='stream') startStream();
+  }catch(e){
+    log('Webcam refusée: '+e.message,'err');
+  }
+}
+
+function stopWebcam(){
+  stopStream();
+  if(webcamStream){ webcamStream.getTracks().forEach(t=>t.stop()); webcamStream=null; }
+  document.getElementById('webcam-video').srcObject=null;
+  document.getElementById('webcam-placeholder').style.display='flex';
+  document.getElementById('btn-webcam-start').textContent='📷 Démarrer la webcam';
+  document.getElementById('btn-webcam-start').className='btn btn-secondary';
+  log('Webcam arrêtée','info');
+}
+
+// ── WebSocket stream ───────────────────────────────────────────────────────
+function startStream(){
+  if(!webcamStream) return;
+  document.getElementById('rt-badge').style.display='flex';
+  isStreaming = true;
+
+  try{
+    wsConn = new WebSocket(WS_URL);
+    wsConn.onopen = ()=>{ log('WebSocket connecté','ok'); streamLoop(); };
+    wsConn.onmessage = e=>{ handleStreamResult(JSON.parse(e.data)); };
+    wsConn.onerror = ()=>{ log('WebSocket erreur — fallback REST','err'); wsConn=null; startRestStream(); };
+    wsConn.onclose = ()=>{ if(isStreaming) startRestStream(); };
+  }catch(e){ startRestStream(); }
+}
+
+function streamLoop(){
+  if(!isStreaming || !wsConn || wsConn.readyState!==1) return;
+  const frame = captureFrame();
+  if(frame) wsConn.send(JSON.stringify({
+    frame: frame,
+    model: currentModel==='both'?'yolo':currentModel,
+    conf: getConf()
+  }));
+  streamTimer = setTimeout(streamLoop, 80); // ~12 FPS
+}
+
+// Fallback REST polling si pas de WebSocket
+function startRestStream(){
+  if(!isStreaming) return;
+  log('Mode polling REST activé','info');
+  async function poll(){
+    if(!isStreaming) return;
+    const frame = captureFrame();
+    if(frame){
+      try{
+        const blob = dataURLToBlob(frame);
+        const fd = new FormData(); fd.append('file', blob, 'frame.jpg');
+        const mdl = currentModel==='both'?'yolo':currentModel;
+        const r = await fetch(`${API}/predict/frame?model=${mdl}&conf=${getConf()}`,{method:'POST',body:fd});
+        const d = await r.json();
+        handleStreamResult(d);
+      }catch(e){}
+    }
+    streamTimer = setTimeout(poll, 100);
+  }
+  poll();
+}
+
+function stopStream(){
+  isStreaming = false;
+  if(streamTimer){ clearTimeout(streamTimer); streamTimer=null; }
+  if(wsConn){ wsConn.close(); wsConn=null; }
+  document.getElementById('rt-badge').style.display='none';
+}
+
+// Capture webcam frame → base64
+function captureFrame(){
+  const vid = document.getElementById('webcam-video');
+  if(!vid.videoWidth) return null;
+  const c = document.createElement('canvas');
+  c.width=vid.videoWidth; c.height=vid.videoHeight;
+  c.getContext('2d').drawImage(vid,0,0);
+  return c.toDataURL('image/jpeg', 0.7);
+}
+
+function dataURLToBlob(dataUrl){
+  const [header, data] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)[1];
+  const bytes = atob(data);
+  const arr = new Uint8Array(bytes.length);
+  for(let i=0;i<bytes.length;i++) arr[i]=bytes.charCodeAt(i);
+  return new Blob([arr],{type:mime});
+}
+
+// Dessiner les détections sur le canvas overlay
+function handleStreamResult(data){
+  const vid = document.getElementById('webcam-video');
+  const canvas = document.getElementById('webcam-canvas');
+  canvas.width=vid.videoWidth; canvas.height=vid.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  const dets = data.detections || [];
+  dets.forEach(d=>{
+    const [x1,y1,x2,y2] = d.bbox;
+    const [r,g,b2] = d.color||[0,255,136];
+    const col=`rgb(${r},${g},${b2})`;
+    ctx.strokeStyle=col; ctx.lineWidth=2;
+    ctx.strokeRect(x1,y1,x2-x1,y2-y1);
+    const label=`${d.class_name} ${(d.confidence*100).toFixed(0)}%`;
+    ctx.font='bold 13px Share Tech Mono,monospace';
+    const tw=ctx.measureText(label).width;
+    ctx.fillStyle=col; ctx.fillRect(x1,y1-20,tw+10,20);
+    ctx.fillStyle='#000'; ctx.fillText(label,x1+5,y1-5);
+  });
+
+  canvas.style.display='block';
+
+  // update result cards
+  document.getElementById('results-wrap').style.display='grid';
+  document.getElementById('results-wrap').style.gridTemplateColumns='1fr';
+  document.querySelectorAll('.result-card')[0].style.display='';
+  document.querySelectorAll('.result-card')[1].style.display='none';
+  showImageResults(data, data.model||'yolo', null);
+}
+
+// Capture manuelle webcam
+async function snapWebcam(){
+  const frame = captureFrame();
+  if(!frame){ log('Pas de flux webcam','err'); return; }
+  log('Capture envoyée...','info');
+  try{
+    const blob = dataURLToBlob(frame);
+    const fd = new FormData(); fd.append('file',blob,'snap.jpg');
+    const mdl = currentModel==='both'?'yolo':currentModel;
+    const r = await fetch(`${API}/predict/image?model=${currentModel}&conf=${getConf()}&annotated=true`,{method:'POST',body:fd});
+    const d = await r.json();
+    if(d.annotated_image||(d.yolo&&d.yolo.annotated_image)){
+      const b64=d.annotated_image||d.yolo.annotated_image;
+      document.getElementById('preview-placeholder').style.display='none';
+      document.getElementById('preview-img').src='data:image/jpeg;base64,'+b64;
+      document.getElementById('preview-img').style.display='block';
+    }
+    if(currentModel==='both'){showImageResults(d.yolo,'yolo',null);showImageResults(d.rfdetr,'rfdetr',null);}
+    else showImageResults(d,currentModel,null);
+    document.getElementById('results-wrap').style.display='grid';
+  }catch(e){log('Erreur snap: '+e.message,'err');}
+}
+
+// ── Reset ──────────────────────────────────────────────────────────────────
+function reset(){
+  selectedFile=null;
+  document.getElementById('btn-detect').disabled=true;
+  document.getElementById('btn-reset').style.display='none';
+  document.getElementById('preview-img').style.display='none';
+  document.getElementById('preview-img').src='';
+  document.getElementById('preview-placeholder').style.display='block';
+  const old = document.querySelector('video.preview-vid');
+  if(old) old.remove();
+  resetResults();
+  document.getElementById('file-photo').value='';
+  document.getElementById('file-video').value='';
+  log('Réinitialisé','info');
+}
+
+function resetResults(){
+  document.getElementById('results-wrap').style.display='none';
+  document.getElementById('video-stats-wrap').style.display='none';
+  ['yolo-dets','rfdetr-dets'].forEach(id=>document.getElementById(id).innerHTML='');
+  ['yolo-metric','rfdetr-metric'].forEach(id=>document.getElementById(id).textContent='—');
+}
+
+// ── Webcam detect btn override ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', ()=>{
+  // Override detect btn in webcam mode for snap
+  const origRun = window.runDetection;
+  window.runDetection = async function(){
+    if(currentMode==='webcam' && wcMode==='snap'){ await snapWebcam(); return; }
+    origRun && origRun();
+  };
+  checkHealth();
+});
+</script>
+</body>
+</html>

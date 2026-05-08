@@ -1,0 +1,14 @@
+# Modèles trop lourds pour Git
+models/
+*.pt
+*.pth
+
+# Environnements
+.venv/
+__pycache__/
+*.pyc
+.env
+
+# Divers
+*.log
+tmp/
