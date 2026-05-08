@@ -7,7 +7,7 @@ from pathlib import Path
 from huggingface_hub import hf_hub_download
 
 # ── Config HuggingFace ────────────────────────────────────────────────────────
-HF_REPO_ID = "TON_USERNAME/wildvision-models"   # ← à remplacer
+HF_REPO_ID = "Atinkene/wildvision-models"   # ← à remplacer
 HF_TOKEN   = os.getenv("HF_TOKEN")              # variable d'env Render
 
 MODELS_DIR = Path(__file__).parent.parent / "models"
