@@ -121,6 +121,55 @@ static_dir = BASE_DIR / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+# ── Téléchargement + chargement des modèles au startup ───────────────────────
+@app.on_event("startup")
+async def startup_event():
+    global yolo_model, rfdetr_model
+
+    # 1. Télécharger les modèles manquants
+    from app.download_models import ensure_models
+    ensure_models()
+
+    # 2. Charger YOLOv8m
+    try:
+        from ultralytics import YOLO
+        if YOLO_BEST.exists():
+            yolo_model = YOLO(str(YOLO_BEST))
+            print(f"✅ YOLOv8m chargé (device={DEVICE})")
+        else:
+            yolo_model = YOLO("yolov8m.pt")
+            print("⚠️  YOLOv8m — poids fine-tuned introuvables, fallback COCO")
+    except Exception as e:
+        print(f"❌ YOLOv8m non disponible : {e}")
+
+    # 3. Charger RF-DETR
+    try:
+        from rfdetr import RFDETRBase
+        if RFDETR_BEST.exists():
+            rfdetr_model = RFDETRBase(num_classes=NC, device=DEVICE)
+            ckpt = torch.load(str(RFDETR_BEST), map_location=DEVICE)
+            print(f"[RF-DETR] Clés checkpoint : {list(ckpt.keys()) if isinstance(ckpt, dict) else type(ckpt)}")
+            raw_sd = ckpt.get("state_dict") or ckpt.get("model") or ckpt
+            state_dict = {
+                k.replace("model.", "", 1): v
+                for k, v in raw_sd.items()
+                if not k.startswith("criterion") and not k.startswith("postprocess")
+            }
+            inner = rfdetr_model.model
+            while hasattr(inner, "model") and not hasattr(inner, "load_state_dict"):
+                inner = inner.model
+            if hasattr(inner, "load_state_dict"):
+                missing, unexpected = inner.load_state_dict(state_dict, strict=False)
+                print(f"[RF-DETR] missing={len(missing)}, unexpected={len(unexpected)}")
+                inner.eval()
+            print(f"✅ RF-DETR chargé (device={DEVICE})")
+        else:
+            print(f"⚠️  RF-DETR — checkpoint introuvable : {RFDETR_BEST}")
+    except Exception as e:
+        import traceback
+        print(f"❌ RF-DETR non disponible : {e}")
+        traceback.print_exc()
+
 # ── Utilitaires ───────────────────────────────────────────────────────────────
 def predict_yolo(img_bgr: np.ndarray, conf: float = 0.25) -> dict:
     if yolo_model is None:
